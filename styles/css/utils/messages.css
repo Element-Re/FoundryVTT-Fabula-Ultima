@@ -2054,10 +2054,6 @@
 		}
 	}
 
-	& .resource-middle-input {
-		border: 1px solid var(--pfu-color-app-section-border);
-	}
-
 	& .star-label:not(.fus-star2-border) {
 		&.fus-sl-star {
 			background-image: none;

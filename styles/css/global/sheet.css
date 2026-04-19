@@ -132,6 +132,7 @@
 	}
 
 	.resources {
+		gap: 5px;
 	}
 
 	.derived {

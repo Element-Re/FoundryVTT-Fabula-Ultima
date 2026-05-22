@@ -1,7 +1,7 @@
 .projectfu .pfu-sheet__party {
 	display: grid;
 	height: 100%;
-	padding: 0;
+	padding: 4px;
 
 	section {
 		height: 100%;
@@ -9,6 +9,9 @@
 
 	.tab {
 		.content {
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
 		}
 	}
 
@@ -178,6 +181,7 @@
 		flex-direction: column;
 		max-width: 100%;
 		overflow-x: hidden;
+		gap: 5px;
 
 		.soldier,
 		.elite,
@@ -314,6 +318,11 @@
 			display: flex;
 			flex-direction: column;
 			gap: 1rem;
+		}
+
+		.entries.show-dropzones {
+			border: 2px dashed var(--pfu-color-app-control-border);
+			border-radius: 4px;
 		}
 
 		.entry {

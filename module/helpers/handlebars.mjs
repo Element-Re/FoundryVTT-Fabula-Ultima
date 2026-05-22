@@ -96,6 +96,17 @@ export const FUHandlebars = Object.freeze({
 			return str;
 		});
 
+		Handlebars.registerHelper('pfuAcronym', function (str, threshold) {
+			if (str.length <= threshold) {
+				return str;
+			}
+			const split = str.trim().split(' ');
+			if (split.length > 1) {
+				return split.map((word) => word[0].toUpperCase()).join('.');
+			}
+			return split[0];
+		});
+
 		Handlebars.registerHelper('pfuHalf', function (value) {
 			var num = Number(value);
 			if (isNaN(num)) {
@@ -268,6 +279,7 @@ export const FUHandlebars = Object.freeze({
 		Handlebars.registerHelper('pfuItemAnchor', itemAnchor);
 		Handlebars.registerHelper('pfuCompendium', compendium);
 		Handlebars.registerHelper('pfuArrayField', arrayField);
+		Handlebars.registerHelper('pfuHelpIcon', helpIcon);
 	},
 });
 
@@ -285,6 +297,7 @@ export const FUHandlebars = Object.freeze({
  * @property {Boolean} compact If true, will present the controls in a more compact way.
  * @property action
  * @property {"clock"|"basic"} style
+ * @property {String} classes
  */
 
 const progressStyleTemplates = Object.freeze({
@@ -346,6 +359,7 @@ function renderProgress(progress, document, path, options, index = undefined) {
 					controls: controls,
 					action: action,
 					prompt: options.prompt,
+					classes: options.classes ?? '',
 					compact: options.compact,
 					displayName: options.displayName && (progress.name || document.name),
 				})
@@ -554,6 +568,35 @@ function arrayField(options) {
 					path: options.path,
 					type: options.type,
 					options: options.options,
+				})
+			: '';
+	return new Handlebars.SafeString(html);
+}
+
+/**
+ * @typedef FUHandlebarsTooltipOptions
+ * @property {'help'|'info'|'warning'} type
+ * @property
+ */
+
+/**
+ * @param {String} text
+ * @param {FUHandlebarsTooltipOptions} options
+ * @returns {Handlebars.SafeString}
+ */
+function helpIcon(text, options) {
+	if (options.hash) {
+		options = options.hash;
+	}
+
+	const type = options.type ?? 'help';
+	const template = Handlebars.partials[systemTemplatePath('common/icons/tooltip')];
+	const html =
+		typeof template === 'function'
+			? template({
+					text: text,
+					type,
+					...options,
 				})
 			: '';
 	return new Handlebars.SafeString(html);

@@ -936,7 +936,7 @@
 }
 
 .projectfu .button-style.active {
-	color: #fff79a;
+	color: var(--pfu-color-app-control-active-content);
 	border: 1px solid #753002;
 	background: -webkit-gradient(linear, left bottom, left top, from(rgba(226, 128, 121, 0.8)), to(rgba(241, 163, 114, 0.8)));
 	background: linear-gradient(0deg, rgba(226, 128, 121, 0.8) 0%, rgba(241, 163, 114, 0.8) 100%);
@@ -1078,5 +1078,14 @@
 	100% {
 		-webkit-transform: translateY(0);
 		transform: translateY(0);
+	}
+}
+
+.projectfu prose-mirror {
+	max-height: 350px;
+
+	.source-editor {
+		height: 100%;
+		overflow-y: auto;
 	}
 }

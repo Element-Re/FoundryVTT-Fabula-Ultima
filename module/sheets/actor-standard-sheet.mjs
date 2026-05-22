@@ -89,7 +89,6 @@ export class FUStandardActorSheet extends FUActorSheet {
 			// Common
 			...SheetUtils.actions,
 			// General
-			createItem: FUStandardActorSheet.#onCreate,
 			createFavorite: FUStandardActorSheet.#onCreateFavorite,
 			createClock: FUStandardActorSheet.#onCreateClock,
 			updateTrack: { handler: this.#onUpdateTrack, buttons: [0, 2] },
@@ -164,7 +163,7 @@ export class FUStandardActorSheet extends FUActorSheet {
 				{ id: 'stats', label: 'FU.Overview' },
 				{ id: 'classes', label: 'FU.Classes' },
 				{ id: 'features', label: 'FU.Features' },
-				{ id: 'spells', label: 'FU.Spell' },
+				{ id: 'spells', label: 'FU.Spells' },
 				{ id: 'items', label: 'FU.Items' },
 
 				{ id: 'combat', label: 'FU.Combat' },
@@ -172,7 +171,7 @@ export class FUStandardActorSheet extends FUActorSheet {
 
 				{ id: 'notes', label: 'FU.Notes' },
 				{ id: 'effects', label: 'FU.Effects' },
-				{ id: 'advancements', label: 'FU.Advancements' },
+				{ id: 'advancements', label: 'FU.Levels' },
 				{ id: 'settings', label: 'FU.Settings' },
 			],
 			initial: 'stats',
@@ -203,7 +202,7 @@ export class FUStandardActorSheet extends FUActorSheet {
 	#ritualsTable = new RitualsTableRenderer();
 	#consumablesTable = new ConsumablesTableRenderer();
 	#technospheresTable = new TechnospheresTableRenderer();
-	#characterOtherItemsTable = new OtherItemsTableRenderer(
+	#characterOtherItemsTable = new OtherItemsTableRenderer([
 		'class',
 		'skill',
 		'heroic',
@@ -224,11 +223,11 @@ export class FUStandardActorSheet extends FUActorSheet {
 		'hoplosphere',
 		'mnemosphere',
 		'mnemosphereReceptacle',
-	);
+	]);
 
 	// tables required for npcs
 	#basicAttacksTable = new BasicAttacksTableRenderer();
-	#npcOtherItemsTable = new OtherItemsTableRenderer('basic', 'skill', 'spell', 'miscAbility', 'rule', 'treasure', 'behavior');
+	#npcOtherItemsTable = new OtherItemsTableRenderer(['basic', 'skill', 'spell', 'miscAbility', 'rule', 'treasure', 'behavior']);
 	#activeBehaviorsTable = new BehaviorTableRenderer(true);
 	#inactiveBehaviorsTable = new BehaviorTableRenderer(false);
 
@@ -759,13 +758,14 @@ export class FUStandardActorSheet extends FUActorSheet {
 	}
 
 	async _onDragStart(ev) {
+		const { fromUuid } = foundry.utils;
 		const target = ev.currentTarget;
 
 		// Owned Items
 		if (target.dataset.itemId) {
 			let item = this.actor.items.get(target.dataset.itemId);
 			if (!item) {
-				item = fromUuidSync(target.dataset.uuid);
+				item = await fromUuid(target.dataset.uuid);
 			}
 			ev.dataTransfer.setData('text/plain', JSON.stringify(item.toDragData()));
 			return;
@@ -775,7 +775,7 @@ export class FUStandardActorSheet extends FUActorSheet {
 		if (target.dataset.effectId) {
 			let effect = this.actor.effects.get(target.dataset.effectId);
 			if (!effect) {
-				effect = fromUuidSync(target.dataset.uuid);
+				effect = await fromUuid(target.dataset.uuid);
 			}
 			ev.dataTransfer.setData('text/plain', JSON.stringify(effect.toDragData()));
 			return;
@@ -802,12 +802,12 @@ export class FUStandardActorSheet extends FUActorSheet {
 	// ACTION HANDLERS //
 	/////////////////////
 
-	static #onEdit(event, target) {
+	static async #onEdit(event, target) {
 		const itemId = target.closest('[data-item-id]')?.dataset?.itemId;
 		let item = this.actor.items.get(itemId);
 		if (!item) {
 			const uuid = target.closest('[data-uuid]')?.dataset?.uuid;
-			item = foundry.utils.fromUuidSync(uuid);
+			item = await foundry.utils.fromUuid(uuid);
 		}
 
 		if (item) {
@@ -1252,7 +1252,7 @@ export class FUStandardActorSheet extends FUActorSheet {
 	}
 
 	/* -------------------------------------------- */
-	static #onToggleFavorite(event, target) {
+	static async #onToggleFavorite(event, target) {
 		const itemId = target.closest('[data-item-id]')?.dataset?.itemId;
 		let item;
 		if (!itemId) {
@@ -1262,80 +1262,13 @@ export class FUStandardActorSheet extends FUActorSheet {
 		if (!item) {
 			const uuid = target.closest('[data-uuid]')?.dataset?.uuid;
 			if (uuid) {
-				item = fromUuidSync(uuid);
+				item = await fromUuid(uuid);
 			}
 		}
 
 		if (item) {
 			return item.toggleFavorite();
 		}
-	}
-
-	static async #onCreate(event, target) {
-		let type = target.dataset.type;
-		let subType = target.dataset.subType;
-
-		if (type && type.indexOf(',') >= 0) {
-			const knownItemTypes = new Set(Object.keys(CONFIG.Item.dataModels));
-			const choices = type
-				.split(',')
-				.map((itemType) => itemType.trim())
-				.filter((itemType) => knownItemTypes.has(itemType))
-				.map((itemType) => ({
-					action: itemType,
-					label: game.i18n.localize(CONFIG.Item.typeLabels[itemType]),
-				}));
-
-			type = await foundry.applications.api.DialogV2.wait({
-				window: { title: 'Select Item Type' },
-				content: `<p>Select the type of item you want to create:</p>`,
-				buttons: choices,
-			});
-		}
-
-		if (!type) {
-			return;
-		}
-
-		const itemData = {
-			type: type,
-		};
-
-		if (type === 'classFeature') {
-			itemData.system = { featureType: subType };
-			itemData.name = this.#determineNewFeatureName(type, subType, this.actor);
-		} else if (type === 'optionalFeature') {
-			itemData.system = { optionalType: subType };
-			itemData.name = this.#determineNewFeatureName(type, subType, this.actor);
-		} else {
-			itemData.name = foundry.documents.Item.defaultName({ type: type, parent: this.actor });
-		}
-
-		foundry.documents.Item.create(itemData, { parent: this.actor });
-	}
-
-	#determineNewFeatureName(type, subtype, actor) {
-		const registry = {
-			classFeature: FU.classFeatureRegistry,
-			optionalFeature: FU.optionalFeatureRegistry,
-		}[type];
-
-		const FeatureDataModel = registry.byKey(subtype);
-
-		if (!FeatureDataModel) {
-			return null;
-		}
-
-		const takenNames = new Set();
-		for (const document of actor.itemTypes[type]) {
-			takenNames.add(document.name);
-		}
-
-		const baseName = game.i18n.localize(FeatureDataModel.translation);
-		let name = baseName;
-		let index = 1;
-		while (takenNames.has(name)) name = `${baseName} (${++index})`;
-		return name;
 	}
 
 	static async #onCreateFavorite() {
@@ -1389,10 +1322,10 @@ export class FUStandardActorSheet extends FUActorSheet {
 				flags: { [SYSTEM]: { [Flags.Favorite]: true } },
 			};
 			if (choice.type === 'classFeature') {
-				itemData.name = this.#determineNewFeatureName(choice.type, choice.subtype, this.actor);
+				itemData.name = this._determineNewFeatureName(choice.type, choice.subtype, this.actor);
 				(itemData.system ??= {}).featureType = choice.subtype;
 			} else if (choice.type === 'optionalFeature') {
-				itemData.name = this.#determineNewFeatureName(choice.type, choice.subtype, this.actor);
+				itemData.name = this._determineNewFeatureName(choice.type, choice.subtype, this.actor);
 				(itemData.system ??= {}).optionalType = choice.subtype;
 			} else {
 				itemData.name = foundry.documents.Item.defaultName({ type: choice.type, parent: this.actor });
@@ -1452,10 +1385,10 @@ export class FUStandardActorSheet extends FUActorSheet {
 				system: { hasClock: { value: true } },
 			};
 			if (choice.type === 'classFeature') {
-				itemData.name = this.#determineNewFeatureName(choice.type, choice.subtype, this.actor);
+				itemData.name = this._determineNewFeatureName(choice.type, choice.subtype, this.actor);
 				itemData.system.featureType = choice.subtype;
 			} else if (choice.type === 'optionalFeature') {
-				itemData.name = this.#determineNewFeatureName(choice.type, choice.subtype, this.actor);
+				itemData.name = this._determineNewFeatureName(choice.type, choice.subtype, this.actor);
 				itemData.system.optionalType = choice.subtype;
 			} else {
 				itemData.name = foundry.documents.Item.defaultName({ type: choice.type, parent: this.actor });
@@ -1509,10 +1442,10 @@ export class FUStandardActorSheet extends FUActorSheet {
 				type: choice.type,
 			};
 			if (choice.type === 'classFeature') {
-				itemData.name = this.#determineNewFeatureName(choice.type, choice.subtype, this.actor);
+				itemData.name = this._determineNewFeatureName(choice.type, choice.subtype, this.actor);
 				itemData.system = { featureType: choice.subtype };
 			} else if (choice.type === 'optionalFeature') {
-				itemData.name = this.#determineNewFeatureName(choice.type, choice.subtype, this.actor);
+				itemData.name = this._determineNewFeatureName(choice.type, choice.subtype, this.actor);
 				itemData.system = { optionalType: choice.subtype };
 			} else {
 				itemData.name = foundry.documents.Item.defaultName({ type: choice.type, parent: this.actor });

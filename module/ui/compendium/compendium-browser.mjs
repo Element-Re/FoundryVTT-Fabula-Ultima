@@ -20,7 +20,7 @@ class CompendiumTableRenderer extends FUTableRenderer {
 	static TABLE_CONFIG = {
 		getItems: async (entries) => entries.filter((e) => e.name),
 		tablePreset: 'compendium-item',
-		sort: true,
+		sort: (a, b) => a.name.localeCompare(b.name),
 	};
 }
 
@@ -45,7 +45,9 @@ class SkillsCompendiumTableRenderer extends CompendiumTableRenderer {
 			name: CommonColumns.itemAnchorColumn({ columnName: 'FU.Name' }),
 			sl: CommonColumns.propertyColumn('FU.SkillLevel', 'system.level.max'),
 			class: CommonColumns.propertyColumn('FU.Class', 'system.class.value', {
-				mapFunction: (value) => StringUtils.titleToKebab(value),
+				mapFunction: (value) => {
+					return CompendiumIndex.instance.getItemByFuidSync(value)?.name ?? StringUtils.titleToKebab(value);
+				},
 			}),
 		},
 	};
@@ -62,7 +64,11 @@ class SpellsCompendiumTableRenderer extends CompendiumTableRenderer {
 				localizationRecord: FU.duration,
 			}),
 			cost: CommonColumns.propertyColumn('FU.Cost', 'system.cost.amount'),
-			class: CommonColumns.propertyColumn('FU.Class', 'system.class.value'),
+			class: CommonColumns.propertyColumn('FU.Class', 'system.class.value', {
+				mapFunction: (value) => {
+					return CompendiumIndex.instance.getItemByFuidSync(value)?.name ?? StringUtils.titleToKebab(value);
+				},
+			}),
 		},
 	};
 }
@@ -447,7 +453,6 @@ export class CompendiumBrowser extends FUApplication {
 		this.filter.setCategories(filters);
 
 		for (const trd of tables) {
-			trd.entries.sort((a, b) => a.name.localeCompare(b.name));
 			const html = await trd.renderer.renderTable(trd.entries, {
 				hideIfEmpty: false,
 				isVisible: (item) => {
@@ -586,7 +591,7 @@ export class CompendiumBrowser extends FUApplication {
 					const classes = await this.index.getClasses();
 					const skills = await this.index.getSkills();
 					const classOptions = classes.class
-						.sort((a, b) => a.system.fuid.localeCompare(b.system.fuid))
+						.sort((a, b) => a.name.localeCompare(b.name))
 						.map((c) => ({
 							value: c.system.fuid,
 							label: c.name,

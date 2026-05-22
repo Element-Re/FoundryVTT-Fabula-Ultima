@@ -7,6 +7,7 @@ import { MathHelper } from '../../helpers/math-helper.mjs';
 import { MiscAbilityDataModel } from '../items/misc/misc-ability-data-model.mjs';
 import { ZeroPowerDataModel } from '../items/optionalFeature/zeropower/zeropower-data-model.mjs';
 import { CommonEvents } from '../../checks/common-events.mjs';
+import { RuleDataModel } from '../items/rule/rule-data-model.mjs';
 
 /**
  * @typedef Actor
@@ -528,7 +529,7 @@ export class FUActor extends Actor {
 			'system.resources.mp.value': maxMP,
 		};
 
-		if (recoverInventoryPoints) {
+		if (maxIP && recoverInventoryPoints) {
 			updateData['system.resources.ip.value'] = maxIP;
 		}
 
@@ -627,6 +628,10 @@ export class FUActor extends Actor {
 			// if (this.sheet.rendered) {
 			// 	this.sheet.render();
 			// }
+		}
+		// Special Rule
+		else if (progress.parent instanceof RuleDataModel) {
+			await progress.parent.parent.update({ [`system.progress.current`]: current });
 		}
 
 		// Update this instance for tracking, though it is not the same as the one that just got replaced in the model

@@ -7,7 +7,7 @@
 	flex: 3;
 	margin: 0;
 	white-space: nowrap;
-	font-family: 'PT Sans Narrow', sans-serif;
+	font-family: 'PFU Sans Narrow', sans-serif;
 	font-size: 1rem;
 	font-weight: bold;
 }
@@ -37,7 +37,7 @@
 	-webkit-box-flex: 1;
 	-ms-flex: 1;
 	flex: 1;
-	font-family: 'PT Sans Narrow', sans-serif;
+	font-family: 'PFU Sans Narrow', sans-serif;
 	font-size: 1rem;
 	font-weight: bold;
 	font-variant: small-caps;
@@ -143,7 +143,7 @@
 }
 .chat-message .chat-desc p,
 .chat-message.whisper .chat-desc p {
-	font-family: 'PT Sans Narrow', sans-serif;
+	font-family: 'PFU Sans Narrow', sans-serif;
 	font-size: 1rem;
 	line-height: 1.45em;
 }
@@ -1426,7 +1426,7 @@
 .message-content .targets .target .miss {
 	white-space: nowrap;
 	font-size: var(--font-size-14);
-	font-family: 'PT Sans Narrow', sans-serif;
+	font-family: 'PFU Sans Narrow', sans-serif;
 	font-size: 1rem;
 	font-weight: bold;
 	font-variant: small-caps;
@@ -1437,7 +1437,7 @@
 }
 
 .exp-award {
-	font-family: 'PT Sans Narrow', sans-serif;
+	font-family: 'PFU Sans Narrow', sans-serif;
 }
 .exp-award .exp-calculation {
 	grid-template-columns: 3fr 1fr;
@@ -2003,7 +2003,7 @@
 	& .cell-item-controls .cell-item-controls__control,
 	& .cell-effect-controls .cell-effect-controls__control {
 		border: thin solid var(--pfu-color-app-control-border);
-		color: var(--pfu-color-app-control-content) !important;
+		color: var(--pfu-color-app-control-content);
 		background: var(--pfu-color-app-control-fill);
 		box-shadow: 1px 2px var(--pfu-color-app-control-shadow);
 		transition: none;
@@ -2036,9 +2036,9 @@
 				margin: 1px -1px -1px 1px;
 				-webkit-transform: unset;
 				transform: unset;
-				/*color: var(--pfu-color-app-control-active-content) !important;*/
+				color: var(--pfu-color-app-control-active-content);
 				border: thin solid var(--pfu-color-app-control-active-border);
-				background: var(--pfu-color-app-control-active-fill) !important;
+				background: var(--pfu-color-app-control-active-fill);
 				box-shadow: 0 1px var(--pfu-color-app-control-active-shadow);
 				text-shadow: unset;
 				transition: none;
@@ -2046,9 +2046,9 @@
 
 			&:not(.active, :active, .cell-item-controls__control--active):hover {
 				text-shadow: none;
-				/*color: var(--pfu-color-app-control-highlight-content) !important;*/
+				color: var(--pfu-color-app-control-highlight-content);
 				border: thin solid var(--pfu-color-app-control-highlight-border);
-				background: var(--pfu-color-app-control-highlight-fill) !important;
+				background: var(--pfu-color-app-control-highlight-fill);
 				box-shadow: 1px 2px var(--pfu-color-app-control-highlight-shadow);
 			}
 		}

@@ -5,7 +5,10 @@ import { ItemSelectionDialog } from '../ui/features/item-selection-dialog.mjs';
 import { ObjectUtils } from '../helpers/object-utils.mjs';
 import { HTMLUtils } from '../helpers/html-utils.mjs';
 import { createMenuTool, SETTINGS } from '../settings.js';
-import { SYSTEM } from '../helpers/config.mjs';
+import { FU, SYSTEM } from '../helpers/config.mjs';
+import { InventoryPipeline } from '../pipelines/inventory-pipeline.mjs';
+import { ClassFeatureRegistry } from '../documents/items/classFeature/class-feature-registry.mjs';
+import { OptionalFeatureRegistry } from '../documents/items/optionalFeature/optional-feature-registry.mjs';
 
 const { api, sheets } = foundry.applications;
 
@@ -51,6 +54,7 @@ export class FUActorSheet extends api.HandlebarsApplicationMixin(sheets.ActorShe
 			configureSheetOptions: this.#configureSheetOptions,
 			addArrayElement: this.#addArrayElement,
 			removeArrayElement: this.#removeArrayElement,
+			createItem: this.#onCreateItem,
 		},
 	};
 
@@ -78,13 +82,13 @@ export class FUActorSheet extends api.HandlebarsApplicationMixin(sheets.ActorShe
 	/**
 	 * @param {PointerEvent} event
 	 */
-	#onAuxClick(event) {
+	async #onAuxClick(event) {
 		if (event.button === 1) {
 			const target = event.target;
 			let item = this.actor.items.get(target.closest('[data-item-id]')?.dataset?.itemId);
 
 			if (!item) {
-				item = foundry.utils.fromUuidSync(target.closest('[data-uuid]')?.dataset?.uuid);
+				item = await foundry.utils.fromUuid(target.closest('[data-uuid]')?.dataset?.uuid);
 			}
 
 			if (item) {
@@ -111,6 +115,14 @@ export class FUActorSheet extends api.HandlebarsApplicationMixin(sheets.ActorShe
 		console.warn('Unhandled action:', target.dataset.action, event, target);
 	}
 
+	/**
+	 * Because we need to conform to Foundry API definition we can not make this method or its parent '_onClickAction' async.
+	 * That unfortunately means that dispatching click actions to deeply nested items will _not_ work for actors in compendiums.
+	 *
+	 * @param {PointerEvent} event
+	 * @param {HTMLElement} target
+	 * @return {boolean}
+	 */
 	#dispatchClickActionToItem(event, target) {
 		let success = false;
 
@@ -123,7 +135,8 @@ export class FUActorSheet extends api.HandlebarsApplicationMixin(sheets.ActorShe
 
 		if (!item) {
 			const uuid = target.closest('[data-uuid]')?.dataset?.uuid;
-			item = foundry.utils.fromUuidSync(uuid);
+			// see jsdoc comment
+			item = foundry.utils.fromUuidSync(uuid, { strict: true });
 		}
 
 		if (item && item.system[target.dataset.action] instanceof Function) {
@@ -145,24 +158,29 @@ export class FUActorSheet extends api.HandlebarsApplicationMixin(sheets.ActorShe
 			return result?.length ? item : null;
 		}
 
+		if (item instanceof foundry.documents.Item && item.parent && item.parent !== this.actor) {
+			const isShop = item.parent.type === 'stash' && item.parent.system.merchant;
+			return InventoryPipeline.requestTrade(item.parent.uuid, item.uuid, isShop, this.actor.uuid);
+		}
+
 		return super._onDropItem(event, item);
 	}
 
 	async _onSortItem(event, item) {
-		const { fromUuidSync } = foundry.utils;
-		const source = fromUuidSync(item.uuid);
+		const { fromUuid } = foundry.utils;
+		const source = await fromUuid(item.uuid);
 
 		// Confirm the drop target
 		const dropTarget = event.target.closest('[data-uuid]');
 		if (!dropTarget) return;
-		const target = fromUuidSync(dropTarget.dataset.uuid);
+		const target = await fromUuid(dropTarget.dataset.uuid);
 		if (source.uuid === target.uuid) return;
 
 		// Identify sibling items based on adjacent HTML elements
 		const siblings = [];
 		for (const element of dropTarget.parentElement.children) {
 			const siblingId = element.dataset.uuid;
-			if (siblingId && siblingId !== source.uuid) siblings.push(fromUuidSync(element.dataset.uuid));
+			if (siblingId && siblingId !== source.uuid) siblings.push(await fromUuid(element.dataset.uuid));
 		}
 
 		// Perform the sort
@@ -182,7 +200,7 @@ export class FUActorSheet extends api.HandlebarsApplicationMixin(sheets.ActorShe
 	 */
 	static async #migrateItems(event, target) {
 		/** @type FUItem[] **/
-		let items = Array.from(this.actor.items.values());
+		let items = Array.from(this.actor.items.values()).sort((a, b) => a.name.localeCompare(b.name));
 		/** @type ItemMigrationAction[] **/
 		const updates = await FoundryUtils.getItemMigrationActions(items);
 
@@ -203,18 +221,24 @@ export class FUActorSheet extends api.HandlebarsApplicationMixin(sheets.ActorShe
 				style: 'list',
 				items: items,
 				compendiumItems: compendiumItems,
-				initial: items,
 				getDescription: async (item) => {
 					const text = item.system?.description ?? '';
 					return text;
 				},
+				additionalInputs: {
+					keepImages: new foundry.data.fields.BooleanField({ label: 'FU.CompendiumMigrateItemKeepImages', initial: true }),
+					keepNames: new foundry.data.fields.BooleanField({ label: 'FU.CompendiumMigrateItemKeepNames', initial: true }),
+				},
 			};
 			const dialog = new ItemSelectionDialog(data);
-			const result = await dialog.open();
+			const {
+				selected: result,
+				additionalInputs: { keepImages, keepNames },
+			} = await dialog.open();
 			if (result && result.length > 0) {
 				const uuids = new Set(result.map((item) => item.uuid));
 				const selectedUpdates = updates.filter((u) => uuids.has(u.item.uuid)).map((u) => u.procedure);
-				await Promise.all(selectedUpdates.map((fn) => fn()));
+				await Promise.all(selectedUpdates.map((fn) => fn({ keepImages, keepNames })));
 				ui.notifications.info(StringUtils.localize('FU.CompendiumMigrateSuccess', { count: selectedUpdates.length }));
 			}
 		}
@@ -275,5 +299,103 @@ export class FUActorSheet extends api.HandlebarsApplicationMixin(sheets.ActorShe
 	static async #configureSheetOptions(event, target) {
 		const tool = createMenuTool(`${SYSTEM}.${SETTINGS.sheetOptions}`);
 		tool.click();
+	}
+
+	static async #onCreateItem(event, target) {
+		return this._onCreateItem(event, target);
+	}
+
+	async _onCreateItem(event, target) {
+		let type = target.dataset.type;
+		let subType = target.dataset.subType;
+
+		if (type && type.indexOf(',') >= 0) {
+			const knownItemTypes = new Set(Object.keys(CONFIG.Item.dataModels));
+			const choices = type
+				.split(',')
+				.map((itemType) => itemType.trim())
+				.filter((itemType) => knownItemTypes.has(itemType))
+				.map((itemType) => ({
+					action: itemType,
+					label: game.i18n.localize(CONFIG.Item.typeLabels[itemType]),
+				}));
+
+			type = await foundry.applications.api.DialogV2.wait({
+				window: { title: game.i18n.localize('FU.DialogCreateItemSelectTypeTitle') },
+				content: `<p>${game.i18n.localize('FU.DialogCreateItemSelectTypeContent')}</p>`,
+				buttons: choices,
+			});
+		}
+
+		if (!type) {
+			return;
+		}
+
+		const itemData = {
+			type: type,
+		};
+
+		if ((type === 'classFeature' || type === 'optionalFeature') && subType && subType.indexOf(',') >= 0) {
+			const registries = {
+				classFeature: ClassFeatureRegistry.instance,
+				optionalFeature: OptionalFeatureRegistry.instance,
+			};
+
+			const knownFeatureTypes = registries[type].qualifiedTypes;
+			const choices = subType
+				.split(',')
+				.map((featureType) => featureType.trim())
+				.filter((featureType) => featureType in knownFeatureTypes)
+				.map((featureType) => ({
+					action: featureType,
+					label: game.i18n.localize(knownFeatureTypes[featureType].translation),
+				}));
+
+			subType = await foundry.applications.api.DialogV2.wait({
+				window: { title: game.i18n.localize('FU.DialogCreateItemSelectTypeTitle') },
+				content: `<p>${game.i18n.localize('FU.DialogCreateItemSelectTypeContent')}</p>`,
+				buttons: choices,
+			});
+
+			if (!subType) {
+				return;
+			}
+		}
+
+		if (type === 'classFeature') {
+			itemData.system = { featureType: subType };
+			itemData.name = this._determineNewFeatureName(type, subType, this.actor);
+		} else if (type === 'optionalFeature') {
+			itemData.system = { optionalType: subType };
+			itemData.name = this._determineNewFeatureName(type, subType, this.actor);
+		} else {
+			itemData.name = foundry.documents.Item.defaultName({ type: type, parent: this.actor });
+		}
+
+		foundry.documents.Item.create(itemData, { parent: this.actor });
+	}
+
+	_determineNewFeatureName(type, subtype, actor) {
+		const registry = {
+			classFeature: FU.classFeatureRegistry,
+			optionalFeature: FU.optionalFeatureRegistry,
+		}[type];
+
+		const FeatureDataModel = registry.byKey(subtype);
+
+		if (!FeatureDataModel) {
+			return null;
+		}
+
+		const takenNames = new Set();
+		for (const document of actor.itemTypes[type]) {
+			takenNames.add(document.name);
+		}
+
+		const baseName = game.i18n.localize(FeatureDataModel.translation);
+		let name = baseName;
+		let index = 1;
+		while (takenNames.has(name)) name = `${baseName} (${++index})`;
+		return name;
 	}
 }
